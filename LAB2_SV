@@ -1,0 +1,154 @@
+# Install required packages
+!pip install langchain_community
+!pip install replicate
+
+# Import necessary libraries
+from langchain_community.llms import Replicate
+import os
+from google.colab import userdata
+
+# Set up the API token
+api_token = userdata.get('REPLICATE_API_TOKEN')
+os.environ['REPLICATE_API_TOKEN'] = api_token
+
+# Model setup
+model = "ibm-granite/granite-3.0-8b-instruct"
+
+# Create an instance of the Replicate model
+output = Replicate(
+    model=model,
+    replicate_api_token=api_token,
+)
+
+## PART 1: CLASSIFICATION TASK WITH PARAMETER TUNING
+
+# Define customer reviews
+customer_reviews = [
+    "The battery lasts all day, but the phone gets hot during gaming.",
+    "The screen is too dim outdoors, but I love the colors indoors.",
+    "This phone is fast, but it keeps crashing when I open certain apps."
+]
+
+# Format reviews for input
+reviews_text = "\n".join([f"Review {i+1}: {review}" for i, review in enumerate(customer_reviews)])
+
+### Step 2: Test initial classification with default parameters
+default_params = {
+    "top_k": 0,
+    "top_p": 1.0,
+    "max_tokens": 256,
+    "min_tokens": 0,
+    "random_seed": None,
+    "repetition_penalty": 1.0,
+    "stopping_criteria": "length (256 tokens)",
+    "stopping_sequence": None
+}
+
+classification_prompt = f"""
+Classify these reviews as positive, negative, or mixed, and tag relevant focus areas such as battery life, screen quality, or performance:
+
+{reviews_text}
+"""
+
+# Run with default parameters
+default_response = output.invoke(classification_prompt, parameters=default_params)
+print("Default Parameters Response:\n")
+print(default_response)
+
+### Step 3: Adjust single parameter (top_k)
+top_k_params = {
+    "top_k": 5,  # Only consider top 5 most likely tokens
+    "top_p": 1.0,
+    "max_tokens": 256,
+    "min_tokens": 0,
+    "random_seed": None,
+    "repetition_penalty": 1.0,
+    "stopping_criteria": "length (256 tokens)",
+    "stopping_sequence": None
+}
+
+# Run with top_k adjustment
+top_k_response = output.invoke(classification_prompt, parameters=top_k_params)
+print("\nAdjusted top_k Response:\n")
+print(top_k_response)
+
+### Step 4: Adjust multiple parameters
+refined_params = {
+    "top_k": 1,          # Most deterministic output
+    "top_p": 0.5,        # Focus on high-probability tokens
+    "max_tokens": 10,    # Keep output concise
+    "min_tokens": 3,     # Ensure minimum response length
+    "random_seed": None,
+    "repetition_penalty": 1.5,  # Reduce redundancy
+    "stopping_criteria": "length",
+    "stopping_sequence": None
+}
+
+# Run with multiple parameter adjustments
+refined_response = output.invoke(classification_prompt, parameters=refined_params)
+print("\nMultiple Parameters Adjusted Response:\n")
+print(refined_response)
+
+## PART 2: SUMMARIZATION TASK WITH PARAMETER TUNING
+
+# Define meeting transcript
+customer_meetings = [
+"""
+The meeting began with a discussion of the Q3 marketing budget. It was decided that 40% of the budget will go to digital ads, 30% to events, and 30% to social media campaigns. The team emphasized the need for influencer partnerships to increase brand visibility and email marketing to boost direct engagement. A pilot program to test new ad formats will launch next month, with the team reviewing results by the end of Q3.
+
+Later, the team discussed campaign performance metrics. ROI monitoring will be a top priority, and adjustments will be made based on performance data.
+
+The events team raised concerns about resource allocation for upcoming trade shows, and it was agreed that an additional $10,000 would be reallocated to cover these costs.
+
+Lastly, the team reviewed new creative concepts for the upcoming campaign, deciding to proceed with Concept B, which tested better among focus groups. Deadlines for campaign assets were finalized: all deliverables must be submitted by July 15.
+"""
+]
+
+# Format meeting text
+meeting_text = "\n".join([f"Meeting {i+1}: {meeting}" for i, meeting in enumerate(customer_meetings)])
+
+### Step 5: Test initial summarization with default parameters
+summarization_prompt = f"""
+Summarize this meeting by focusing on key points, decisions, and action items:
+
+{meeting_text}
+"""
+
+# Run with default parameters
+default_summary = output.invoke(summarization_prompt, parameters=default_params)
+print("\nDefault Summary Response:\n")
+print(default_summary)
+
+### Step 6: Adjust single parameter (max_tokens)
+max_tokens_params = {
+    "top_k": 0,
+    "top_p": 1.0,
+    "max_tokens": 20,  # More concise output
+    "min_tokens": 0,
+    "random_seed": None,
+    "repetition_penalty": 1.0,
+    "stopping_criteria": "length (256 tokens)",
+    "stopping_sequence": None
+}
+
+# Run with max_tokens adjustment
+concise_summary = output.invoke(summarization_prompt, parameters=max_tokens_params)
+print("\nConcise Summary Response (max_tokens=20):\n")
+print(concise_summary)
+
+### Step 7: Adjust multiple parameters
+final_params = {
+    "top_k": 10,        # Allow some variation
+    "top_p": 0.9,       # Focus on high-probability tokens
+    "max_tokens": 20,   # Keep concise
+    "min_tokens": 0,
+    "random_seed": None,
+    "repetition_penalty": 1.5,  # Reduce redundancy
+    "stopping_criteria": "length (256 tokens)",
+    "stopping_sequence": " "    # Stop at natural breaks
+}
+
+# Run with final parameter adjustments
+final_summary = output.invoke(summarization_prompt, parameters=final_params)
+print("\nFinal Optimized Summary Response:\n")
+print(final_summary)
