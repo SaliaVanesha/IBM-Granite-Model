@@ -1,0 +1,155 @@
+# Install required packages
+!pip install langchain_community
+!pip install replicate
+
+# Import necessary libraries
+from langchain_community.llms import Replicate
+import os
+from google.colab import userdata
+
+# Set up the API token
+api_token = userdata.get('REPLICATE_API_TOKEN')
+os.environ['REPLICATE_API_TOKEN'] = api_token
+
+# Model setup
+model = "ibm-granite/granite-3.0-8b-instruct"
+
+# Create an instance of the Replicate model
+output = Replicate(
+    model=model,
+    replicate_api_token=api_token,
+)
+
+## PART 1: CLASSIFYING CUSTOMER REVIEWS
+
+# Define customer reviews
+customer_reviews = [
+    "The battery lasts all day, and the performance is excellent.",
+    "The screen is too dim outdoors, but I love the colors indoors.",
+    "This phone is slow and keeps crashing when I open certain apps."
+]
+
+# Format reviews for input
+reviews_text = "\n".join([f"Review {i+1}: {review}" for i, review in enumerate(customer_reviews)])
+
+# Initial classification prompt
+initial_prompt = f"""
+Classify these reviews as Positive, Negative, or Mixed:
+
+{reviews_text}
+"""
+
+# Run initial classification
+initial_response = output.invoke(initial_prompt)
+print("Initial Classification Response:\n")
+print(initial_response)
+
+# Refined prompt with categories
+refined_prompt = f"""
+Classify these reviews as positive, negative, or mixed, and tag relevant categories (battery life, screen quality, or performance):
+
+{reviews_text}
+"""
+
+# Run refined classification
+refined_response = output.invoke(refined_prompt)
+print("\nRefined Classification Response:\n")
+print(refined_response)
+
+# Multi-step prompt
+multitask_prompt = f"""
+Complete the task in 2 steps.
+
+Step 1: Classify these reviews as positive, negative, or mixed.
+Step 2: For each review, identify relevant categories: battery life, screen quality, or performance.
+
+{reviews_text}
+"""
+
+# Run multi-step classification
+multitask_response = output.invoke(multitask_prompt)
+print("\nMulti-step Classification Response:\n")
+print(multitask_response)
+
+# Formatted output prompt
+formatted_prompt = f"""
+Classify these reviews as Positive, Negative, or Mixed, and tag relevant categories. Use this format:
+
+- Sentiment: [Sentiment]
+- Categories: [Categories].
+
+{reviews_text}
+"""
+
+# Run formatted classification
+formatted_response = output.invoke(formatted_prompt)
+print("\nFormatted Classification Response:\n")
+print(formatted_response)
+
+## PART 2: SUMMARIZING MEETING TRANSCRIPTS
+
+# Define meeting transcript
+customer_meetings = [
+"""
+The meeting began with a discussion of the Q3 marketing budget. It was decided that 40% of the budget will go to digital ads, 30% to events, and 30% to social media campaigns. The team emphasized the need for influencer partnerships to increase brand visibility and email marketing to boost direct engagement. A pilot program to test new ad formats will launch next month, with the team reviewing results by the end of Q3.
+
+Later, the team discussed campaign performance metrics. ROI monitoring will be a top priority, and adjustments will be made based on performance data.
+
+The events team raised concerns about resource allocation for upcoming trade shows, and it was agreed that an additional $10,000 would be reallocated to cover these costs.
+
+Lastly, the team reviewed new creative concepts for the upcoming campaign, deciding to proceed with Concept 8, which tested better among focus groups. Deadlines for campaign assets were finalized: all deliverables must be submitted by July 15.
+"""
+]
+
+# Format meeting text
+meeting_text = "\n".join([f"Meeting {i+1}: {meeting}" for i, meeting in enumerate(customer_meetings)])
+
+# Initial summarization prompt
+initial_summary_prompt = f"""
+Summarize this meeting:
+
+{meeting_text}
+"""
+
+# Run initial summarization
+initial_summary_response = output.invoke(initial_summary_prompt)
+print("\nInitial Summary Response:\n")
+print(initial_summary_response)
+
+# Refined prompt with length constraint
+refined_summary_prompt = f"""
+Summarize this meeting in three sentences:
+
+{meeting_text}
+"""
+
+# Run refined summarization
+refined_summary_response = output.invoke(refined_summary_prompt)
+print("\nRefined Summary Response (3 sentences):\n")
+print(refined_summary_response)
+
+# Focus area prompt
+focusarea_prompt = f"""
+Summarize this meeting by focusing on key points, decisions made, and action items:
+
+{meeting_text}
+"""
+
+# Run focus area summarization
+focusarea_response = output.invoke(focusarea_prompt)
+print("\nFocus Area Summary Response:\n")
+print(focusarea_response)
+
+# Structured output prompt
+structured_prompt = f"""
+Summarize this meeting into a structured format using the following headings: Key Points Discussed, Decisions Made, and Action Items.
+Mention timelines.
+Include only two concise bullet points under each heading.
+
+{meeting_text}
+"""
+
+# Run structured summarization
+structured_response = output.invoke(structured_prompt)
+print("\nStructured Summary Response:\n")
+print(structured_response)
