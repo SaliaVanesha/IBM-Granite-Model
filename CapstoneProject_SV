@@ -1,0 +1,187 @@
+# IBM Granite Capstone Project
+# Analyzing the 2025 Electric Vehicle Charging Experience
+
+# Step 1: Install necessary packages
+!pip install langchain_community replicate pandas numpy matplotlib wordcloud
+
+# Step 2: Import libraries
+from langchain_community.llms import Replicate
+import os
+from google.colab import userdata
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+from wordcloud import WordCloud
+from collections import Counter
+import re
+
+# Step 3: Set up Replicate API Token from Colab Secrets
+# Ensure you have stored your Replicate token in Colab Secrets as 'REPLICATE_API_TOKEN'
+try:
+    api_token = userdata.get('REPLICATE_API_TOKEN')
+    os.environ['REPLICATE_API_TOKEN'] = api_token
+except Exception as e:
+    print("Error: REPLICATE_API_TOKEN not found in Colab Secrets. Please add it to proceed.")
+    print(e)
+
+# Step 4: Set up the IBM Granite model
+model_id = "ibm-granite/granite-3.0-8b-instruct"
+llm = Replicate(
+    model=model_id,
+    replicate_api_token=api_token,
+)
+
+## Part 1: Data Collection and Preparation
+# Load the EV Charging Station dataset from an online source for our 2025 scenario
+print("Downloading dataset...")
+# URL encoding is needed for the space in the filename
+!wget -q -O "EV_Station_Usage.csv" "https://raw.githubusercontent.com/koustavghosh170/EV-Charging-Station-Usage-Analysis/main/Electric%20Vehicle%20Charging%20Station%20Usage.csv"
+full_data = pd.read_csv('EV_Station_Usage.csv')
+print("Dataset downloaded successfully.")
+
+# --- Data Cleaning and Preprocessing ---
+# Drop rows where the user comment ('Comments') is missing, as that's our primary text for analysis
+full_data.dropna(subset=['Comments'], inplace=True)
+
+# Engineer a 'sentiment' column from the 'Rating'
+# 4-5 stars: Positive (1)
+# 1-2 stars: Negative (0)
+# 3 stars: Neutral (2)
+def assign_sentiment(rating):
+    if rating >= 4:
+        return 1 # Positive
+    elif rating <= 2:
+        return 0 # Negative
+    else:
+        return 2 # Neutral
+
+full_data['sentiment'] = full_data['Rating'].apply(assign_sentiment)
+
+# For efficient analysis, we'll work with a random sample of 1500 reviews
+data = full_data.sample(n=1500, random_state=42)
+
+# Rename columns for easier access
+data.rename(columns={'Comments': 'review'}, inplace=True)
+
+print("\nSample of cleaned and prepared data:")
+print(data[['review', 'Rating', 'sentiment']].head())
+print(f"\nUsing {len(data)} reviews for our analysis.")
+
+# Visualize the sentiment distribution
+sentiment_counts = data['sentiment'].value_counts().sort_index()
+plt.figure(figsize=(8, 6))
+sentiment_counts.plot(kind='bar', color=['red', 'green', 'grey'])
+plt.title('Distribution of EV Charging Station Sentiments (2025 Scenario)')
+plt.xlabel('Sentiment (0=Negative, 1=Positive, 2=Neutral)')
+plt.ylabel('Number of Reviews')
+plt.xticks(ticks=[0, 1, 2], labels=['Negative', 'Positive', 'Neutral'], rotation=0)
+plt.show()
+
+## Part 2: Classification with IBM Granite
+def classify_station_review(reviews, params=None):
+    """Classify EV station reviews using the IBM Granite model."""
+    if params is None:
+        params = {"max_tokens": 60, "repetition_penalty": 1.25}
+
+    results = []
+    for review in reviews:
+        prompt = f"""
+        Analyze the following EV charging station review. Classify it as "Positive", "Negative", or "Neutral".
+        Then, identify the primary reason in one or two words (e.g., "Broken Charger", "Fast Speed", "High Cost", "Easy Access").
+
+        Review: "{review}"
+        """
+        try:
+            response = llm.invoke(prompt, parameters=params)
+            results.append(response)
+        except Exception as e:
+            results.append(f"Error: {e}")
+
+    return results
+
+# Test classification on 5 sample reviews
+sample_reviews = data['review'].sample(5, random_state=10).tolist()
+print("\nSample reviews for classification:")
+for review in sample_reviews:
+    print(f"- {review}")
+
+classifications = classify_station_review(sample_reviews)
+print("\nAI Classification Results:")
+for i, (review, classification) in enumerate(zip(sample_reviews, classifications)):
+    print(f"\nReview {i+1}: {review}")
+    print(f"Classification: {classification}")
+
+## Part 3: Thematic Summarization with IBM Granite
+def summarize_review(text, params=None):
+    """Summarize a detailed review using the IBM Granite model."""
+    if params is None:
+        params = {"max_tokens": 80, "repetition_penalty": 1.4}
+
+    prompt = f"""
+    Summarize the key points from the following EV charging station review into one concise sentence.
+
+    Review: "{text}"
+    """
+    return llm.invoke(prompt, parameters=params)
+
+# Find a detailed negative review to summarize
+sample_text_for_summary = data[data['sentiment'] == 0]['review'].iloc[5]
+
+print("\nOriginal review for summarization:")
+print(sample_text_for_summary)
+
+summary = summarize_review(sample_text_for_summary)
+print("\nAI-Generated Summary:")
+print(summary)
+
+## Part 4: Trend Analysis & Root Cause Identification
+def analyze_charging_trends(review_list):
+    """Analyze trends from a list of reviews to find root causes."""
+    prompt = f"""
+    As a data analyst for the EV industry, analyze the following user reviews for charging stations.
+    Identify the common themes and suggest the root cause for both positive and negative experiences.
+    Format your output as follows:
+    - Common Positive Themes: [List themes]
+    - Root Cause for Positives: [Explain why]
+    - Common Negative Themes: [List themes]
+    - Root Cause for Negatives: [Explain why]
+    - Key Recommendation: [Provide one strategic recommendation]
+
+    Reviews: {review_list}
+    """
+    params = {"max_tokens": 300, "repetition_penalty": 1.3}
+    return llm.invoke(prompt, parameters=params)
+
+# Analyze trends from 20 random reviews
+print("\nPerforming trend analysis...")
+trend_analysis = analyze_charging_trends(data['review'].sample(20, random_state=20).tolist())
+print("\nAI Trend Analysis Report:")
+print(trend_analysis)
+
+## Part 5: Result Visualization
+# Generate a word cloud from the primary reasons identified in negative reviews
+print("\nGenerating Word Cloud for Negative Themes...")
+negative_reviews = data[data['sentiment'] == 0]['review'].sample(50, random_state=30).tolist()
+negative_classifications = classify_station_review(negative_reviews)
+
+# Extract keywords from classifications using regex, focusing on the "reason" part
+all_text = " ".join(negative_classifications)
+words = re.findall(r'Reason: "?([\w\s]+)"?', all_text, re.IGNORECASE)
+# A simpler regex if the above is too strict
+if not words:
+    words = re.findall(r'\b\w{4,}\b', all_text.lower())
+    # Filter out generic words
+    words = [word for word in words if word not in ['review', 'classification', 'negative', 'primary', 'reason']]
+
+word_counts = Counter([word.strip().title() for word in words])
+
+# Generate word cloud
+if word_counts:
+    wordcloud = WordCloud(width=800, height=400, background_color='black', colormap='autumn').generate_from_frequencies(word_counts)
+    plt.figure(figsize=(12, 8))
+    plt.imshow(wordcloud, interpolation='bilinear')
+    plt.axis('off')
+    plt.title('Top Reasons for Negative EV Charging Experiences (2025)')
+    plt.show()
+else:
+    print("Could not extract enough keywords to generate a word cloud.")
